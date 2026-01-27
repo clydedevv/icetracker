@@ -1,0 +1,240 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// Report status in moderation workflow
+enum ReportStatus {
+  PENDING    // Awaiting moderation
+  APPROVED   // Approved and visible on map
+  REJECTED   // Rejected by moderator
+  ARCHIVED   // Old/outdated report
+}
+
+// Report type/severity
+enum ReportType {
+  CRITICAL   // Ongoing raid/detention
+  ACTIVE     // Active ICE presence
+  OBSERVED   // ICE vehicle/agent sighting
+  OTHER      // Other related activity
+}
+
+// Verification level
+enum VerificationLevel {
+  UNVERIFIED     // Anonymous submission
+  VERIFIED       // Ethereum wallet verified
+  TRUSTED        // From trusted partner org
+}
+
+// Source of the report
+enum ReportSource {
+  WEB        // Web form
+  TELEGRAM   // Telegram bot
+  SIGNAL     // Signal bot
+  AGGREGATED // From public data aggregation
+}
+
+model Report {
+  id              String            @id @default(uuid())
+  
+  // Location data
+  latitude        Float
+  longitude       Float
+  address         String?           // Human-readable address
+  city            String?
+  state           String?
+  
+  // Report details
+  type            ReportType
+  status          ReportStatus      @default(PENDING)
+  title           String
+  description     String
+  
+  // Verification
+  verificationLevel VerificationLevel @default(UNVERIFIED)
+  walletAddress   String?           // Ethereum address if verified
+  walletSignature String?           // Signature for verification
+  
+  // Source tracking
+  source          ReportSource      @default(WEB)
+  sourceId        String?           // Telegram message ID, etc.
+  
+  // Media
+  imageUrls       String[]          // Array of image URLs
+  
+  // Timestamps
+  reportedAt      DateTime          // When the activity was observed
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  expiresAt       DateTime?         // Auto-archive after this time
+  
+  // Moderation
+  moderatedBy     String?           // Moderator ID
+  moderatedAt     DateTime?
+  moderationNotes String?
+  
+  // Confirmations
+  confirmations   Confirmation[]
+  
+  // Alerts sent
+  alerts          Alert[]
+  
+  @@index([latitude, longitude])
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+  @@index([city, state])
+}
+
+model Confirmation {
+  id              String            @id @default(uuid())
+  reportId        String
+  report          Report            @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  // Who confirmed
+  walletAddress   String?
+  organizationId  String?
+  organization    Organization?     @relation(fields: [organizationId], references: [id])
+  
+  confirmedAt     DateTime          @default(now())
+  notes           String?
+  
+  @@unique([reportId, walletAddress])
+  @@unique([reportId, organizationId])
+}
+
+model Organization {
+  id              String            @id @default(uuid())
+  name            String
+  type            String            // RRN, nonprofit, legal aid, etc.
+  description     String?
+  
+  // Verification
+  verified        Boolean           @default(false)
+  walletAddress   String?           @unique
+  
+  // Contact
+  contactEmail    String?
+  website         String?
+  
+  // Coverage area
+  cities          String[]
+  states          String[]
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  confirmations   Confirmation[]
+  members         Moderator[]
+}
+
+model Moderator {
+  id              String            @id @default(uuid())
+  email           String            @unique
+  passwordHash    String
+  name            String
+  
+  // Role
+  role            String            @default("moderator") // admin, moderator
+  
+  // Organization affiliation
+  organizationId  String?
+  organization    Organization?     @relation(fields: [organizationId], references: [id])
+  
+  // Ethereum verification (optional)
+  walletAddress   String?           @unique
+  
+  // Activity
+  lastLoginAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Session tokens
+  sessions        Session[]
+}
+
+model Session {
+  id              String            @id @default(uuid())
+  moderatorId     String
+  moderator       Moderator         @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
+  
+  token           String            @unique
+  expiresAt       DateTime
+  createdAt       DateTime          @default(now())
+}
+
+model Subscriber {
+  id              String            @id @default(uuid())
+  
+  // Subscription channel
+  channel         String            // telegram, signal, email
+  channelId       String            // Chat ID, phone number, email
+  
+  // Subscription preferences
+  types           ReportType[]      // Which report types to receive
+  
+  // Geographic filter (optional)
+  cities          String[]
+  states          String[]
+  radiusKm        Float?            // Alert within X km of a point
+  centerLat       Float?
+  centerLng       Float?
+  
+  // Status
+  active          Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  alerts          Alert[]
+  
+  @@unique([channel, channelId])
+}
+
+model Alert {
+  id              String            @id @default(uuid())
+  reportId        String
+  report          Report            @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  subscriberId    String
+  subscriber      Subscriber        @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  
+  // Delivery status
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  failedAt        DateTime?
+  errorMessage    String?
+  
+  createdAt       DateTime          @default(now())
+  
+  @@unique([reportId, subscriberId])
+}
+
+// Blockchain verification log
+model BlockchainLog {
+  id              String            @id @default(uuid())
+  
+  // Reference
+  reportId        String?
+  action          String            // report_created, report_confirmed, etc.
+  
+  // Blockchain data
+  txHash          String?           @unique
+  blockNumber     Int?
+  chainId         Int               @default(1) // Ethereum mainnet
+  
+  // Signature data
+  signerAddress   String
+  messageHash     String
+  signature       String
+  
+  createdAt       DateTime          @default(now())
+  
+  @@index([reportId])
+  @@index([signerAddress])
+}
