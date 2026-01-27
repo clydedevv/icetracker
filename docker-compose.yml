@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: icetracker
+      POSTGRES_PASSWORD: icetracker
+      POSTGRES_DB: icetracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DATABASE_URL: postgres://icetracker:icetracker@db:5432/icetracker
+      CORS_ORIGIN: http://localhost:5173
+    depends_on:
+      - db
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build: ./frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:4000
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  db_data:
+
