@@ -19,6 +19,10 @@ import {
   Circle
 } from "lucide-react";
 
+// Minneapolis coordinates
+const MINNEAPOLIS_CENTER: [number, number] = [44.9778, -93.265];
+const DEFAULT_ZOOM = 11;
+
 // Dynamic import for Map to avoid SSR issues
 const Map = dynamic(() => import("@/components/Map"), { 
   ssr: false,
@@ -126,8 +130,8 @@ export default function Home() {
               <AlertTriangle className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-white text-lg leading-tight">ICETracker</h1>
-              <p className="text-xs text-slate-500 hidden sm:block">Community ICE Activity Reports</p>
+              <h1 className="font-bold text-white text-lg leading-tight">ICETracker MSP</h1>
+              <p className="text-xs text-slate-500 hidden sm:block">Minneapolis Community ICE Reports</p>
             </div>
           </div>
         </div>
@@ -288,6 +292,8 @@ export default function Home() {
         <main className="flex-1 relative">
           <Map
             reports={reports.filter((r) => r.status === "APPROVED")}
+            center={MINNEAPOLIS_CENTER}
+            zoom={DEFAULT_ZOOM}
             selectedTypes={selectedTypes}
             showConfirmedOnly={confirmedOnly}
             onReportClick={setSelectedReport}
