@@ -1,114 +1,189 @@
-# ICETracker
+# ICETracker MSP
 
-Community-driven platform for reporting and tracking ICE (Immigration and Customs Enforcement) activity. Designed to help communities stay informed and safe.
+<div align="center">
 
-## Features
+![ICETracker MSP](https://img.shields.io/badge/ICETracker-MSP-dc2626?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMCAzTDIgMTloMjBMMTAgM3ptMCA0bDYgMTBINGw2LTEwem0wIDNoLjAxdjNoLS4wMXYtM3ptMCA0aC4wMXYxaC0uMDF2LTF6Ii8+PC9zdmc+)
+![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
+![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)
 
-### MVP (Phase 1) ✅
-- Interactive map with Leaflet/OpenStreetMap
-- Report submission via web form
-- Report types: Critical, Active, Observed, Other
-- Verification levels: Trusted, Verified, Unverified
-- Filter by type and verification status
-- Mobile-responsive design
-- Dark theme optimized for low-light viewing
+**Real-time community ICE activity alerts for Minneapolis**
 
-### Coming Soon (Phase 2)
-- [ ] PostgreSQL + PostGIS for persistent storage
-- [ ] Telegram bot for submissions and alerts
-- [ ] Signal integration
-- [ ] Admin moderation dashboard
-- [ ] Ethereum wallet verification
+[Live Site](https://ice.clydedev.xyz) • [Telegram Bot](https://t.me/icetracker_msp_bot) • [Alert Channel](https://t.me/+EnMv3G3j241jYjU0)
 
-### Future (Phase 3)
-- [ ] Blockchain logging via Clawdbot
-- [ ] Multilingual support (Spanish, Arabic, Somali)
-- [ ] Analytics and historical trends
-- [ ] Public data aggregation
+</div>
 
-## Quick Start
+---
+
+## What is ICETracker MSP?
+
+A community-driven platform for reporting and tracking ICE activity in Minneapolis. Features include:
+
+- **Live Map** — Real-time reports with filtering by type and verification
+- **Telegram Alerts** — Instant notifications when activity is reported
+- **Proximity Alerts** — Get DMs when ICE is spotted near your zip code
+- **Bot Submissions** — Report sightings directly via Telegram
+
+---
+
+## Live Deployment
+
+| Service | URL |
+|---------|-----|
+| Web App | https://ice.clydedev.xyz |
+| Telegram Bot | [@icetracker_msp_bot](https://t.me/icetracker_msp_bot) |
+| Alert Channel | [Join](https://t.me/+EnMv3G3j241jYjU0) |
+
+---
+
+## Self-Hosting Setup
+
+### Prerequisites
+
+- Node.js 20+
+- PostgreSQL 15+ with PostGIS
+- Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
+
+### 1. Clone & Install
 
 ```bash
-# Install dependencies
+git clone https://github.com/clydedevv/icetracker.git
+cd icetracker
 npm install
+```
 
-# Run development server
+### 2. Environment Variables
+
+Create `.env` and `.env.local`:
+
+```bash
+# .env
+DATABASE_URL="postgresql://user:password@localhost:5432/icetracker?schema=public"
+```
+
+```bash
+# .env.local
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHANNEL_ID=@your_channel  # optional, for broadcasts
+TELEGRAM_ADMIN_IDS=123456789       # comma-separated admin user IDs
+APP_URL=https://your-domain.com
+```
+
+### 3. Database Setup
+
+```bash
+# Generate Prisma client
+npx prisma generate
+
+# Run migrations
+npx prisma migrate deploy
+
+# (Optional) Seed with iceout.org data
+npx tsx scripts/import-sightings.ts
+```
+
+### 4. Run
+
+```bash
+# Development
 npm run dev
 
-# Build for production
+# Production
 npm run build
-
-# Start production server
 npm start
+
+# Telegram bot (separate process)
+npx tsx src/bot.ts
 ```
 
-## Environment Variables
-
-Create a `.env.local` file:
-
-```env
-# Database (for production)
-DATABASE_URL="postgresql://user:password@localhost:5432/icetracker"
-
-# Telegram Bot (Phase 2)
-TELEGRAM_BOT_TOKEN=
-
-# Ethereum RPC (Phase 3)
-ETHEREUM_RPC_URL=
-```
-
-## Docker Deployment
+### 5. PM2 (Production)
 
 ```bash
-# Build and run
-docker-compose up -d
+# Web app
+pm2 start npm --name "icetracker" -- start
 
-# View logs
-docker-compose logs -f
+# Telegram bot
+pm2 start "npx tsx src/bot.ts" --name "icetracker-bot"
+
+pm2 save
 ```
 
-## Tech Stack
+---
 
-- **Frontend**: Next.js 16, React, Tailwind CSS
-- **Map**: Leaflet, react-leaflet, OpenStreetMap tiles
-- **Database**: PostgreSQL with PostGIS (production)
-- **ORM**: Prisma
-- **Deployment**: Docker, PM2
+## Telegram Bot Commands
+
+### For Everyone
+| Command | Description |
+|---------|-------------|
+| `/alerts <zip>` | Get alerts within 5 miles of zip code |
+| `/alerts <zip> <miles>` | Custom radius (1-50 miles) |
+| `/alerts off` | Stop receiving alerts |
+| `/alerts status` | Check your subscription |
+| `/map` | Get link to the live map |
+
+### For Verified Reporters
+| Command | Description |
+|---------|-------------|
+| `/report` | How to submit a report |
+| `/submit TYPE, Address, Description` | Submit a report |
+| `/register` | Request verified status |
+| `/status` | Check verification status |
+
+**Report Types:** `CRITICAL`, `ACTIVE`, `OBSERVED`, `OTHER`
+
+**Example:**
+```
+/submit ACTIVE, Lake Street & Chicago Ave, Two ICE vehicles spotted
+```
+
+---
 
 ## Report Types
 
-| Type | Color | Description |
+| Type | Color | When to Use |
 |------|-------|-------------|
-| Critical | 🔴 Red | Ongoing raid, detention, immediate threat |
-| Active | 🟠 Orange | Active ICE presence or activity |
-| Observed | 🟡 Yellow | ICE vehicle or agent sighting |
-| Other | ⚪ Gray | Related activity or information |
+| 🔴 Critical | Red | Active raid, arrests happening |
+| 🟠 Active | Orange | ICE agents currently present |
+| 🟡 Observed | Yellow | Vehicle or agent sighting |
+| ⚪ Other | Gray | Unverified or general info |
 
-## Verification Levels
+---
 
-- **Trusted**: From verified partner organizations (RRNs, nonprofits)
-- **Verified**: Reporter verified via Ethereum wallet signature
-- **Unverified**: Anonymous community submission
+## Tech Stack
+
+- **Frontend:** Next.js 16, React, Tailwind CSS
+- **Map:** Leaflet, react-leaflet, CartoDB dark tiles
+- **Database:** PostgreSQL + Prisma
+- **Bot:** Telegraf (Node.js)
+- **Geocoding:** Nominatim (OpenStreetMap)
+
+---
+
+## Data Sources
+
+Reports are aggregated from:
+- Community submissions via web and Telegram
+- [iceout.org](https://iceout.org) (People Over Papers)
+
+---
 
 ## Disclaimer
 
-⚠️ **Important**:
-- Reports are user-submitted and may contain errors
+⚠️ **Important:**
+- Reports are community-submitted and may contain errors
 - Always verify with local rapid response networks
-- This platform does not encourage violence or harassment
-- Information may be outdated by the time you view it
+- This is for awareness, not confrontation
 - No personal data is stored; consider using a VPN
+
+---
 
 ## Resources
 
 - [Know Your Rights](https://www.informedimmigrant.com/guides/ice-raids/)
+- [ACLU: Immigrants' Rights](https://www.aclu.org/know-your-rights/immigrants-rights)
 - [United We Dream](https://unitedwedream.org/)
-- [RAICES Texas](https://www.raicestexas.org/)
+
+---
 
 ## License
 
-Open source under MIT License. Built for community safety and awareness.
-
-## Contributing
-
-Contributions welcome! Please read our guidelines and submit PRs to the main repository.
+MIT License. Built for community safety and awareness.
