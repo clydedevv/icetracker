@@ -1,8 +1,7 @@
 # ICETracker MSP
 
-<div align="center">
+<img width="1511" height="777" alt="image" src="https://github.com/user-attachments/assets/2f484aea-5bef-4296-8f8a-ed0bf5117f4b" />
 
-![ICETracker MSP](https://github.com/user-attachments/assets/38e0b9f2-5f1a-4e6f-aa8d-3c8b8f74e7d0)
 
 **Real-time community ICE activity alerts for Minneapolis**
 
