@@ -1,0 +1,32 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#0f172a"/>
+  <rect x="40" y="40" width="1120" height="550" rx="20" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+  
+  <!-- Alert icon -->
+  <g transform="translate(100, 200)">
+    <polygon points="60,0 120,104 0,104" fill="#dc2626"/>
+    <rect x="54" y="30" width="12" height="40" rx="2" fill="white"/>
+    <circle cx="60" cy="85" r="8" fill="white"/>
+  </g>
+  
+  <!-- Title -->
+  <text x="260" y="240" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="bold" fill="white">ICETracker MSP</text>
+  
+  <!-- Subtitle -->
+  <text x="260" y="310" font-family="system-ui, -apple-system, sans-serif" font-size="32" fill="#94a3b8">Real-time community ICE alerts</text>
+  
+  <!-- Features -->
+  <g transform="translate(260, 380)">
+    <circle cx="0" cy="0" r="8" fill="#dc2626"/>
+    <text x="25" y="8" font-family="system-ui, sans-serif" font-size="24" fill="#e2e8f0">Live Map</text>
+    
+    <circle cx="200" cy="0" r="8" fill="#f97316"/>
+    <text x="225" y="8" font-family="system-ui, sans-serif" font-size="24" fill="#e2e8f0">Telegram Alerts</text>
+    
+    <circle cx="480" cy="0" r="8" fill="#eab308"/>
+    <text x="505" y="8" font-family="system-ui, sans-serif" font-size="24" fill="#e2e8f0">Zip Code Notifications</text>
+  </g>
+  
+  <!-- URL -->
+  <text x="260" y="500" font-family="system-ui, sans-serif" font-size="28" fill="#64748b">ice.clydedev.xyz</text>
+</svg>

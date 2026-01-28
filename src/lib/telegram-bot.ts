@@ -18,8 +18,56 @@ interface PendingRequest {
   reason?: string;
 }
 
+interface AlertSubscription {
+  id: number;
+  zipCode: string;
+  latitude: number;
+  longitude: number;
+  radiusMiles: number;
+  active: boolean;
+  createdAt: Date;
+}
+
 const trustedUsers: Map<number, TrustedUser> = new Map();
 const pendingRequests: Map<number, PendingRequest> = new Map();
+const alertSubscriptions: Map<number, AlertSubscription> = new Map();
+
+// Calculate distance between two points in miles (Haversine formula)
+function getDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3959; // Earth's radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+// Lookup zip code coordinates using free API
+async function lookupZipCode(zipCode: string): Promise<{ lat: number; lng: number; city: string; state: string } | null> {
+  try {
+    // Using Zippopotam.us free API
+    const response = await fetch(`https://api.zippopotam.us/us/${zipCode}`);
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    if (data.places && data.places.length > 0) {
+      const place = data.places[0];
+      return {
+        lat: parseFloat(place.latitude),
+        lng: parseFloat(place.longitude),
+        city: place["place name"],
+        state: place["state abbreviation"],
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("[TelegramBot] Zip code lookup failed:", error);
+    return null;
+  }
+}
 
 let bot: Telegraf | null = null;
 let config: {
@@ -67,35 +115,137 @@ export function initBot() {
   bot.start((ctx) => {
     const isAdmin = config.ADMIN_IDS.includes(ctx.from.id);
     const isTrusted = trustedUsers.has(ctx.from.id);
+    const hasAlerts = alertSubscriptions.has(ctx.from.id);
 
     ctx.reply(
       `👋 Welcome to ICETracker MSP Bot!\n\n` +
       `This bot helps the Minneapolis community track ICE activity.\n\n` +
       `📍 View the map: ${config.APP_URL}\n\n` +
-      `Commands:\n` +
+      `🔔 <b>Get alerts near you:</b>\n` +
+      `/alerts 55401 — alerts within 5 miles of zip code\n` +
+      `/alerts 55401 10 — customize radius (1-50 miles)\n` +
+      (hasAlerts ? `✅ You have alerts enabled\n` : ``) +
+      `\n📝 <b>Other commands:</b>\n` +
       `/report - Submit a report (${isTrusted ? "✅ you're verified" : "requires verification"})\n` +
       `/register - Request verified reporter status\n` +
       `/status - Check your verification status\n` +
+      `/map - View the live map\n` +
       (isAdmin ? `\n🔐 Admin commands:\n/pending - View pending requests\n/approve <user_id> - Approve a user\n/deny <user_id> - Deny a request\n/trusted - List trusted users` : "") +
-      `\n\n⚠️ Always verify info with local rapid response networks.`
+      `\n\n⚠️ Always verify info with local rapid response networks.`,
+      { parse_mode: "HTML" }
     );
   });
 
   // Help command
   bot.help((ctx) => {
     ctx.reply(
-      `ICETracker MSP Bot Commands:\n\n` +
+      `<b>ICETracker MSP Bot Commands</b>\n\n` +
+      `🔔 <b>Proximity Alerts:</b>\n` +
+      `/alerts <zip> — get alerts near your zip code\n` +
+      `/alerts <zip> <miles> — set custom radius\n` +
+      `/alerts off — stop alerts\n\n` +
+      `📝 <b>Reporting:</b>\n` +
       `/report - Submit an ICE activity report\n` +
+      `/submit - Quick report submission\n` +
       `/register - Request verified status\n` +
-      `/status - Check your status\n` +
-      `/map - Get link to the map\n\n` +
-      `📍 Map: ${config.APP_URL}`
+      `/status - Check your verification status\n\n` +
+      `📍 Map: ${config.APP_URL}`,
+      { parse_mode: "HTML" }
     );
   });
 
   // Map link
   bot.command("map", (ctx) => {
     ctx.reply(`📍 View ICETracker MSP map:\n${config.APP_URL}`);
+  });
+
+  // Alerts subscription by zip code
+  bot.command("alerts", async (ctx) => {
+    const args = ctx.message.text.replace("/alerts", "").trim();
+    
+    // Check if turning off
+    if (args.toLowerCase() === "off" || args.toLowerCase() === "stop") {
+      const existing = alertSubscriptions.get(ctx.from.id);
+      if (existing) {
+        alertSubscriptions.delete(ctx.from.id);
+        ctx.reply("🔕 Alert subscription cancelled. You will no longer receive proximity alerts.\n\nUse /alerts <zip> to subscribe again.");
+      } else {
+        ctx.reply("You don't have an active alert subscription.");
+      }
+      return;
+    }
+
+    // Check if checking status
+    if (args.toLowerCase() === "status" || args === "") {
+      const existing = alertSubscriptions.get(ctx.from.id);
+      if (existing) {
+        ctx.reply(
+          `📍 Your alert subscription:\n\n` +
+          `Zip Code: ${existing.zipCode}\n` +
+          `Radius: ${existing.radiusMiles} miles\n` +
+          `Status: ${existing.active ? "✅ Active" : "❌ Inactive"}\n\n` +
+          `To change: /alerts <new zip> [radius]\n` +
+          `To stop: /alerts off`
+        );
+      } else {
+        ctx.reply(
+          `🔔 Get notified when ICE is spotted near you!\n\n` +
+          `Usage: /alerts <zip code> [radius in miles]\n\n` +
+          `Examples:\n` +
+          `• /alerts 55401 — alerts within 5 miles (default)\n` +
+          `• /alerts 55401 10 — alerts within 10 miles\n` +
+          `• /alerts off — stop alerts\n\n` +
+          `You'll receive a DM whenever activity is reported near your location.`
+        );
+      }
+      return;
+    }
+
+    // Parse zip code and optional radius
+    const parts = args.split(/\s+/);
+    const zipCode = parts[0];
+    const radiusMiles = parts[1] ? parseInt(parts[1]) : 5;
+
+    // Validate zip code format
+    if (!/^\d{5}$/.test(zipCode)) {
+      ctx.reply("❌ Please enter a valid 5-digit US zip code.\n\nExample: /alerts 55401");
+      return;
+    }
+
+    // Validate radius
+    if (isNaN(radiusMiles) || radiusMiles < 1 || radiusMiles > 50) {
+      ctx.reply("❌ Radius must be between 1 and 50 miles.\n\nExample: /alerts 55401 10");
+      return;
+    }
+
+    // Look up zip code
+    const location = await lookupZipCode(zipCode);
+    if (!location) {
+      ctx.reply("❌ Couldn't find that zip code. Please check and try again.");
+      return;
+    }
+
+    // Save subscription
+    alertSubscriptions.set(ctx.from.id, {
+      id: ctx.from.id,
+      zipCode,
+      latitude: location.lat,
+      longitude: location.lng,
+      radiusMiles,
+      active: true,
+      createdAt: new Date(),
+    });
+
+    ctx.reply(
+      `✅ Alert subscription activated!\n\n` +
+      `📍 Location: ${location.city}, ${location.state} (${zipCode})\n` +
+      `📏 Radius: ${radiusMiles} miles\n\n` +
+      `You'll receive a DM when ICE activity is reported within ${radiusMiles} miles of your location.\n\n` +
+      `• /alerts status — check your subscription\n` +
+      `• /alerts off — stop alerts`
+    );
+
+    console.log(`[TelegramBot] New alert subscription: user ${ctx.from.id} -> ${zipCode} (${radiusMiles}mi)`);
   });
 
   // Status check
@@ -227,8 +377,10 @@ export function initBot() {
         }),
       });
 
-      if (response.ok) {
-        const autoApproved = user.level === "trusted" || user.level === "admin";
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const autoApproved = data.report?.autoApproved || user.level === "trusted" || user.level === "admin";
         
         ctx.reply(
           `✅ Report submitted!\n\n` +
@@ -240,9 +392,11 @@ export function initBot() {
           `\n\n📍 View map: ${config.APP_URL}`
         );
       } else {
-        throw new Error("API error");
+        const errorMsg = data.error || "Unknown error";
+        ctx.reply(`❌ ${errorMsg}\n\nTry being more specific with the address, or use the web form: ${config.APP_URL}`);
       }
     } catch (error) {
+      console.error("[TelegramBot] Submit error:", error);
       ctx.reply("❌ Failed to submit report. Please try again or use the web form: " + config.APP_URL);
     }
   });
@@ -395,7 +549,7 @@ export function initBot() {
   return bot;
 }
 
-// Broadcast alert to channel
+// Broadcast alert to channel and nearby subscribers
 export async function broadcastAlert(report: {
   type: string;
   title: string;
@@ -403,9 +557,13 @@ export async function broadcastAlert(report: {
   description: string;
   reportedAt: string;
   id: string;
+  latitude?: number;
+  longitude?: number;
+  verificationLevel?: string;
+  source?: string;
 }) {
-  if (!bot || !config?.CHANNEL_ID) {
-    console.log("[TelegramBot] Cannot broadcast - bot or channel not configured");
+  if (!bot) {
+    console.log("[TelegramBot] Cannot broadcast - bot not configured");
     return;
   }
 
@@ -417,29 +575,117 @@ export async function broadcastAlert(report: {
   };
 
   const emoji = typeEmoji[report.type] || "📍";
-  const time = new Date(report.reportedAt).toLocaleString("en-US", {
+  const reportTime = new Date(report.reportedAt);
+  const now = new Date();
+  const minutesAgo = Math.floor((now.getTime() - reportTime.getTime()) / 60000);
+  
+  const timeStr = reportTime.toLocaleString("en-US", {
     timeZone: "America/Chicago",
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
   });
+  
+  const timeAgo = minutesAgo < 60 
+    ? `${minutesAgo} min ago`
+    : minutesAgo < 1440 
+      ? `${Math.floor(minutesAgo / 60)}h ago`
+      : `${Math.floor(minutesAgo / 1440)}d ago`;
 
-  const message = 
-    `${emoji} <b>${report.type}: ${report.title}</b>\n\n` +
-    (report.address ? `📍 ${report.address}\n` : "") +
-    `🕐 ${time}\n\n` +
-    `${report.description}\n\n` +
-    `<a href="${config.APP_URL}">View on map →</a>\n\n` +
-    `⚠️ Always verify with local RRN`;
+  // Build Google Maps link
+  const mapsLink = report.latitude && report.longitude
+    ? `https://maps.google.com/?q=${report.latitude},${report.longitude}`
+    : null;
 
-  try {
-    await bot.telegram.sendMessage(config.CHANNEL_ID, message, {
-      parse_mode: "HTML",
-      link_preview_options: { is_disabled: true },
+  const isVerified = report.verificationLevel === "TRUSTED" || report.source === "AGGREGATED";
+  const statusLine = isVerified ? "✅ Verified" : "⚠️ Unconfirmed";
+  const headerLine = isVerified ? "✅ ICE ACTIVITY VERIFIED" : `${emoji} ICE AGENTS REPORTED`;
+
+  let channelMessage = `<b>${headerLine}</b>\n\n`;
+  
+  if (report.address) {
+    channelMessage += `📍 ${report.address}\n`;
+  }
+  
+  if (mapsLink) {
+    channelMessage += `🗺 <a href="${mapsLink}">View on Map</a>\n`;
+  }
+  
+  channelMessage += `⏰ ${timeStr} (${timeAgo})\n`;
+  channelMessage += `${statusLine}\n\n`;
+  
+  if (report.description) {
+    channelMessage += `${report.description}\n\n`;
+  }
+  
+  channelMessage += `<a href="${config.APP_URL}">View full map →</a>`;
+
+  // Broadcast to channel
+  if (config?.CHANNEL_ID) {
+    try {
+      await bot.telegram.sendMessage(config.CHANNEL_ID, channelMessage, {
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+      });
+      console.log("[TelegramBot] Alert broadcast to channel");
+    } catch (error) {
+      console.error("[TelegramBot] Failed to broadcast to channel:", error);
+    }
+  }
+
+  // Send personalized alerts to nearby subscribers
+  if (report.latitude && report.longitude) {
+    const nearbySubscribers: { sub: AlertSubscription; distance: number }[] = [];
+    
+    alertSubscriptions.forEach((sub) => {
+      if (!sub.active) return;
+      const distance = getDistanceMiles(sub.latitude, sub.longitude, report.latitude!, report.longitude!);
+      if (distance <= sub.radiusMiles) {
+        nearbySubscribers.push({ sub, distance });
+      }
     });
-    console.log("[TelegramBot] Alert broadcast to channel");
-  } catch (error) {
-    console.error("[TelegramBot] Failed to broadcast:", error);
+
+    if (nearbySubscribers.length > 0) {
+      console.log(`[TelegramBot] Notifying ${nearbySubscribers.length} nearby subscribers`);
+      
+      for (const { sub, distance } of nearbySubscribers) {
+        const distanceStr = distance < 1 
+          ? `${Math.round(distance * 5280)} feet` 
+          : `${distance.toFixed(1)} miles`;
+        
+        let dmMessage = `🚨 <b>ICE ACTIVITY NEAR YOU</b>\n\n`;
+        dmMessage += `📏 <b>${distanceStr} from your location</b>\n\n`;
+        
+        if (report.address) {
+          dmMessage += `📍 ${report.address}\n`;
+        }
+        
+        if (mapsLink) {
+          dmMessage += `🗺 <a href="${mapsLink}">View on Map</a>\n`;
+        }
+        
+        dmMessage += `⏰ ${timeStr}\n`;
+        dmMessage += `${statusLine}\n\n`;
+        
+        if (report.description) {
+          dmMessage += `${report.description}\n\n`;
+        }
+        
+        dmMessage += `<a href="${config.APP_URL}">View full map →</a>\n\n`;
+        dmMessage += `<i>To change alerts: /alerts status</i>`;
+
+        try {
+          await bot.telegram.sendMessage(sub.id, dmMessage, {
+            parse_mode: "HTML",
+            link_preview_options: { is_disabled: true },
+          });
+        } catch (error) {
+          console.error(`[TelegramBot] Failed to DM subscriber ${sub.id}:`, error);
+          // If we can't message them, deactivate subscription
+          sub.active = false;
+        }
+      }
+    }
   }
 }
 

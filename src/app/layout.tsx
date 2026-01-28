@@ -5,13 +5,39 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ICETracker - Community ICE Activity Reports",
-  description: "Community-driven platform for reporting and tracking ICE activity. Stay informed, stay safe.",
-  keywords: ["ICE", "immigration", "community", "safety", "tracking"],
+  title: "ICETracker MSP - Community Alerts",
+  description: "Real-time ICE activity alerts for Minneapolis. Community-driven reporting with Telegram notifications and proximity alerts by zip code.",
+  keywords: ["ICE", "immigration", "Minneapolis", "community alerts", "telegram", "know your rights"],
+  metadataBase: new URL("https://ice.clydedev.xyz"),
   openGraph: {
-    title: "ICETracker",
-    description: "Community-driven ICE activity reporting and tracking",
+    title: "ICETracker MSP",
+    description: "Real-time community ICE alerts for Minneapolis. Live map • Telegram alerts • Zip code notifications",
     type: "website",
+    siteName: "ICETracker MSP",
+    locale: "en_US",
+    url: "https://ice.clydedev.xyz",
+    images: [
+      {
+        url: "/og-image.svg",
+        width: 1200,
+        height: 630,
+        alt: "ICETracker MSP - Real-time community ICE alerts",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ICETracker MSP",
+    description: "Real-time community ICE alerts for Minneapolis. Live map • Telegram alerts • Zip code notifications",
+    images: ["/og-image.svg"],
+  },
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
@@ -23,10 +49,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link
-          rel="icon"
-          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚠️</text></svg>"
-        />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
       <body className={inter.className}>{children}</body>
     </html>

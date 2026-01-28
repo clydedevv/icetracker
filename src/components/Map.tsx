@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { Report, ReportType } from "@/types";
 
@@ -46,8 +46,46 @@ interface MapProps {
   center?: [number, number];
   zoom?: number;
   onReportClick?: (report: Report) => void;
+  onMapClick?: () => void;
   selectedTypes?: ReportType[];
   showConfirmedOnly?: boolean;
+  selectedReport?: Report | null;
+}
+
+// Component to handle flying to selected report and back
+function FlyToReport({ report, defaultCenter, defaultZoom }: { report: Report | null | undefined; defaultCenter: [number, number]; defaultZoom: number }) {
+  const { useMap } = require("react-leaflet");
+  const map = useMap();
+  const prevReportRef = useRef<Report | null | undefined>(undefined);
+  
+  useEffect(() => {
+    const hadPrevSelection = prevReportRef.current != null;
+    
+    if (report) {
+      // Zoom in to selected report
+      map.flyTo([report.latitude, report.longitude], 15, { duration: 0.8 });
+    } else if (hadPrevSelection) {
+      // Zoom back out when deselected
+      map.flyTo(defaultCenter, defaultZoom, { duration: 0.8 });
+    }
+    
+    prevReportRef.current = report;
+  }, [report, map, defaultCenter, defaultZoom]);
+  
+  return null;
+}
+
+// Component to handle map click events
+function MapClickHandler({ onClick }: { onClick?: () => void }) {
+  const { useMapEvents } = require("react-leaflet");
+  
+  useMapEvents({
+    click: () => {
+      onClick?.();
+    },
+  });
+  
+  return null;
 }
 
 export default function Map({
@@ -55,8 +93,10 @@ export default function Map({
   center = [39.8283, -98.5795], // US center
   zoom = 4,
   onReportClick,
+  onMapClick,
   selectedTypes,
   showConfirmedOnly = false,
+  selectedReport,
 }: MapProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -94,6 +134,9 @@ export default function Map({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
       />
+      
+      <FlyToReport report={selectedReport} defaultCenter={center} defaultZoom={zoom} />
+      <MapClickHandler onClick={onMapClick} />
       
       {filteredReports.map((report) => (
         <CircleMarker

@@ -1,8 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { ReportType, ReportSubmission } from "@/types";
 import { AlertTriangle, MapPin, Camera, Shield, Send, Loader2 } from "lucide-react";
+
+// Dynamic import for map picker
+const MapContainer = dynamic(() => import("react-leaflet").then((mod) => mod.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import("react-leaflet").then((mod) => mod.TileLayer), { ssr: false });
+const Marker = dynamic(() => import("react-leaflet").then((mod) => mod.Marker), { ssr: false });
+
+interface AddressSuggestion {
+  display_name: string;
+  lat: string;
+  lon: string;
+  address?: {
+    city?: string;
+    town?: string;
+    village?: string;
+    state?: string;
+  };
+}
+
+// Map click handler component
+function MapClickHandler({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) {
+  const { useMapEvents: useEvents } = require("react-leaflet");
+  useEvents({
+    click: (e: any) => {
+      onLocationSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
 
 const REPORT_TYPES: { value: ReportType; label: string; description: string; color: string }[] = [
   {
@@ -50,6 +79,10 @@ export default function ReportForm({ onSubmit, onClose, initialLocation }: Repor
   const [latitude, setLatitude] = useState(initialLocation?.lat || 0);
   const [longitude, setLongitude] = useState(initialLocation?.lng || 0);
   const [address, setAddress] = useState("");
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchingAddress, setSearchingAddress] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [reportedAt, setReportedAt] = useState(new Date().toISOString().slice(0, 16));
@@ -213,15 +246,117 @@ export default function ReportForm({ onSubmit, onClose, initialLocation }: Repor
           </div>
         )}
 
+        <div className="mt-3 relative">
+          <label className="text-xs text-slate-500">Or enter address:</label>
+          <div className="relative mt-1">
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => {
+                const val = e.target.value;
+                setAddress(val);
+                
+                // Debounced search
+                if (searchTimeoutRef.current) {
+                  clearTimeout(searchTimeoutRef.current);
+                }
+                
+                if (val.length > 3) {
+                  setSearchingAddress(true);
+                  searchTimeoutRef.current = setTimeout(async () => {
+                    try {
+                      const res = await fetch(
+                        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&limit=5&addressdetails=1&countrycodes=us`
+                      );
+                      const data = await res.json();
+                      setAddressSuggestions(data || []);
+                      setShowSuggestions(true);
+                    } catch {
+                      setAddressSuggestions([]);
+                    }
+                    setSearchingAddress(false);
+                  }, 300);
+                } else {
+                  setAddressSuggestions([]);
+                  setShowSuggestions(false);
+                }
+              }}
+              onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              placeholder="Start typing an address..."
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 text-slate-900 bg-white text-sm"
+            />
+            {searchingAddress && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+              </div>
+            )}
+            
+            {/* Suggestions dropdown */}
+            {showSuggestions && addressSuggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {addressSuggestions.map((suggestion, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setAddress(suggestion.display_name);
+                      setLatitude(parseFloat(suggestion.lat));
+                      setLongitude(parseFloat(suggestion.lon));
+                      setCity(suggestion.address?.city || suggestion.address?.town || suggestion.address?.village || "");
+                      setState(suggestion.address?.state || "");
+                      setUseCurrentLocation(true);
+                      setShowSuggestions(false);
+                      setAddressSuggestions([]);
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                  >
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                      <span className="line-clamp-2">{suggestion.display_name}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Map Picker */}
         <div className="mt-3">
-          <label className="text-xs text-slate-500">Or enter address manually:</label>
-          <input
-            type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Street address, city, state"
-            className="w-full mt-1 px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 text-sm"
-          />
+          <label className="text-xs text-slate-500 mb-1 block">Or tap on map to set location:</label>
+          <div className="h-48 rounded-lg overflow-hidden border border-slate-300">
+            <MapContainer
+              center={[latitude || 44.9778, longitude || -93.265]}
+              zoom={latitude ? 14 : 10}
+              className="w-full h-full"
+              style={{ background: "#e2e8f0" }}
+            >
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              {latitude && longitude && (
+                <Marker position={[latitude, longitude]} />
+              )}
+              <MapClickHandler 
+                onLocationSelect={async (lat: number, lng: number) => {
+                  setLatitude(lat);
+                  setLongitude(lng);
+                  setUseCurrentLocation(true);
+                  // Reverse geocode
+                  try {
+                    const res = await fetch(
+                      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+                    );
+                    const data = await res.json();
+                    if (data.display_name) {
+                      setAddress(data.display_name);
+                      setCity(data.address?.city || data.address?.town || data.address?.village || "");
+                      setState(data.address?.state || "");
+                    }
+                  } catch {}
+                }}
+              />
+            </MapContainer>
+          </div>
         </div>
 
         {!useCurrentLocation && (
@@ -233,7 +368,7 @@ export default function ReportForm({ onSubmit, onClose, initialLocation }: Repor
                 value={latitude || ""}
                 onChange={(e) => setLatitude(parseFloat(e.target.value))}
                 placeholder="Latitude"
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 text-sm"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 text-slate-900 bg-white text-sm"
               />
             </div>
             <div>
@@ -243,7 +378,7 @@ export default function ReportForm({ onSubmit, onClose, initialLocation }: Repor
                 value={longitude || ""}
                 onChange={(e) => setLongitude(parseFloat(e.target.value))}
                 placeholder="Longitude"
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 text-sm"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 text-slate-900 bg-white text-sm"
               />
             </div>
           </div>
@@ -262,7 +397,7 @@ export default function ReportForm({ onSubmit, onClose, initialLocation }: Repor
           placeholder="e.g., ICE vehicles spotted near downtown"
           required
           maxLength={100}
-          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500"
+          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 text-slate-900 bg-white"
         />
       </div>
 
@@ -277,7 +412,7 @@ export default function ReportForm({ onSubmit, onClose, initialLocation }: Repor
           placeholder="Describe what you observed. Include any relevant details like number of vehicles, agents, or direction of movement."
           required
           rows={4}
-          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 resize-none"
+          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 text-slate-900 bg-white resize-none"
         />
       </div>
 
@@ -291,7 +426,7 @@ export default function ReportForm({ onSubmit, onClose, initialLocation }: Repor
           value={reportedAt}
           onChange={(e) => setReportedAt(e.target.value)}
           required
-          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500"
+          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-500 text-slate-900 bg-white"
         />
       </div>
 

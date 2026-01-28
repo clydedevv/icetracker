@@ -47,6 +47,13 @@ const TYPE_LABELS: Record<ReportType, string> = {
   OTHER: "Other",
 };
 
+const TYPE_DESCRIPTIONS: Record<ReportType, string> = {
+  CRITICAL: "Active raid or arrests",
+  ACTIVE: "Agents currently present",
+  OBSERVED: "Vehicle or agent sighting",
+  OTHER: "Unverified or general info",
+};
+
 export default function Home() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +68,8 @@ export default function Home() {
     "CRITICAL", "ACTIVE", "OBSERVED", "OTHER"
   ]);
   const [confirmedOnly, setConfirmedOnly] = useState(false);
+  const [selectedState, setSelectedState] = useState<string>("MN"); // Default to Minnesota
+  const [availableStates, setAvailableStates] = useState<string[]>([]);
 
   // Fetch reports
   useEffect(() => {
@@ -68,7 +77,13 @@ export default function Home() {
       try {
         const res = await fetch("/api/reports?status=APPROVED");
         const data = await res.json();
-        setReports(data.reports || []);
+        const allReports = data.reports || [];
+        setReports(allReports);
+        
+        // Extract unique states for filter
+        const states = [...new Set(allReports.map((r: Report) => r.state).filter(Boolean))] as string[];
+        states.sort();
+        setAvailableStates(states);
       } catch (error) {
         console.error("Failed to fetch reports:", error);
       } finally {
@@ -110,9 +125,14 @@ export default function Home() {
     }
   };
 
-  const recentReports = reports
-    .filter((r) => selectedTypes.includes(r.type))
-    .slice(0, 10);
+  // Filter reports by state and type
+  const filteredReports = reports.filter((r) => {
+    const matchesType = selectedTypes.includes(r.type);
+    const matchesState = selectedState === "ALL" || r.state === selectedState;
+    return matchesType && matchesState;
+  });
+
+  const recentReports = filteredReports.slice(0, 50);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-900">
@@ -137,6 +157,18 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Telegram CTA - prominent in header */}
+          <a
+            href="https://t.me/+EnMv3G3j241jYjU0"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#0088cc] text-white rounded-lg hover:bg-[#0077b5] transition text-sm font-medium"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+            </svg>
+            Get Alerts
+          </a>
           <button
             onClick={() => setShowInfo(true)}
             className="p-2 text-slate-400 hover:text-white transition"
@@ -153,7 +185,7 @@ export default function Home() {
           </button>
           <button
             onClick={() => setShowReportForm(true)}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center gap-2"
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center gap-2 relative z-[60]"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Report Activity</span>
@@ -162,119 +194,143 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Telegram Alert Banner - Mobile & Tablet */}
+      <a
+        href="https://t.me/+EnMv3G3j241jYjU0"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="lg:hidden flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0088cc] text-white text-sm font-medium shrink-0"
+      >
+        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+        </svg>
+        <span>Join Telegram for instant alerts →</span>
+      </a>
+
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <aside className={`
-          ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-          fixed lg:relative inset-y-0 left-0 z-40
-          w-80 bg-slate-950 border-r border-slate-800 flex flex-col
-          transition-transform duration-300 ease-in-out
-          top-[57px] lg:top-0
-        `}>
-          {/* Filters */}
-          <div className="p-4 border-b border-slate-800">
-            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
-              Filter by Type
-            </h2>
-            <div className="space-y-2">
+        <aside 
+          className="sidebar-mobile fixed left-0 z-[1000] w-[85vw] max-w-80 bg-slate-950 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out"
+          style={{ 
+            top: '57px', 
+            height: 'calc(100dvh - 57px)',
+            transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)'
+          }}
+        >
+          {/* Compact Filters Row */}
+          <div className="p-3 border-b border-slate-800 space-y-2">
+            {/* Type toggles - compact row */}
+            <div className="flex gap-1.5">
               {(["CRITICAL", "ACTIVE", "OBSERVED", "OTHER"] as ReportType[]).map((type) => (
                 <button
                   key={type}
                   onClick={() => toggleType(type)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg transition text-xs ${
                     selectedTypes.includes(type)
                       ? "bg-slate-800 text-white"
                       : "text-slate-500 hover:bg-slate-900"
                   }`}
+                  title={TYPE_DESCRIPTIONS[type]}
                 >
-                  <span className={`w-3 h-3 rounded-full ${TYPE_COLORS[type]}`} />
-                  <span className="flex-1 text-left text-sm">{TYPE_LABELS[type]}</span>
-                  {selectedTypes.includes(type) ? (
-                    <CheckCircle className="w-4 h-4 text-emerald-500" />
-                  ) : (
-                    <Circle className="w-4 h-4 text-slate-600" />
-                  )}
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${TYPE_COLORS[type]}`} />
+                  <span className="hidden sm:inline">{TYPE_LABELS[type]}</span>
                 </button>
               ))}
             </div>
-
-            <div className="mt-4">
+            
+            {/* State & verified row */}
+            <div className="flex gap-2">
+              <select
+                value={selectedState}
+                onChange={(e) => setSelectedState(e.target.value)}
+                className="flex-1 bg-slate-800 text-white border border-slate-700 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                <option value="MN">Minnesota</option>
+                <option value="ALL">All States</option>
+                {availableStates.filter(s => s !== "MN").map((state) => (
+                  <option key={state} value={state}>{state}</option>
+                ))}
+              </select>
               <button
                 onClick={() => setConfirmedOnly(!confirmedOnly)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition ${
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition text-xs ${
                   confirmedOnly
                     ? "bg-emerald-900/30 text-emerald-400 border border-emerald-800"
-                    : "text-slate-500 hover:bg-slate-900 border border-transparent"
+                    : "text-slate-500 hover:bg-slate-900 border border-slate-700"
                 }`}
               >
-                <Shield className="w-4 h-4" />
-                <span className="flex-1 text-left text-sm">Verified only</span>
+                <Shield className="w-3 h-3" />
+                <span>Verified</span>
               </button>
             </div>
           </div>
 
-          {/* Recent Reports */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
-              Recent Reports
-            </h2>
+          {/* Recent Reports - Takes most space */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="p-3 pb-1">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Recent Reports
+                </h2>
+                <span className="text-xs text-slate-500">{filteredReports.length} total</span>
+              </div>
+            </div>
             {loading ? (
-              <div className="text-slate-500 text-sm">Loading...</div>
+              <div className="p-4 text-slate-500 text-sm">Loading...</div>
             ) : recentReports.length === 0 ? (
-              <div className="text-slate-500 text-sm">No reports to display</div>
+              <div className="p-4 text-slate-500 text-sm">No reports to display</div>
             ) : (
-              <div className="space-y-3">
+              <div className="px-3 pb-3 space-y-2">
                 {recentReports.map((report) => (
                   <button
                     key={report.id}
                     onClick={() => setSelectedReport(report)}
                     className={`w-full text-left p-3 rounded-lg border transition ${
                       selectedReport?.id === report.id
-                        ? "bg-slate-800 border-slate-700"
-                        : "bg-slate-900/50 border-slate-800 hover:bg-slate-900"
+                        ? "bg-slate-800 border-slate-600"
+                        : "bg-slate-900/50 border-slate-800 hover:bg-slate-800/50"
                     }`}
                   >
-                    <div className="flex items-start gap-2 mb-1">
-                      <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${TYPE_COLORS[report.type]}`} />
-                      <span className="text-sm font-medium text-white line-clamp-1">
+                    <div className="flex items-start gap-2.5 mb-1.5">
+                      <span className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${TYPE_COLORS[report.type]}`} />
+                      <span className="text-sm font-medium text-white line-clamp-2 leading-snug">
                         {report.title}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500 ml-4">
-                      <Clock className="w-3 h-3" />
-                      {new Date(report.reportedAt).toLocaleDateString()}
+                    <div className="flex items-center gap-3 text-xs text-slate-500 ml-5">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {new Date(report.reportedAt).toLocaleDateString()}
+                      </span>
                       {report.city && (
-                        <>
-                          <MapPin className="w-3 h-3 ml-2" />
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
                           {report.city}
-                        </>
+                        </span>
+                      )}
+                      {report.verificationLevel !== "UNVERIFIED" && (
+                        <span className="text-emerald-400">✓</span>
                       )}
                     </div>
-                    {report.verificationLevel !== "UNVERIFIED" && (
-                      <div className="ml-4 mt-1">
-                        <span className="text-xs px-2 py-0.5 bg-emerald-900/30 text-emerald-400 rounded-full">
-                          ✓ Verified
-                        </span>
-                      </div>
-                    )}
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Stats */}
-          <div className="p-4 border-t border-slate-800">
-            <div className="grid grid-cols-2 gap-3 text-center">
-              <div className="bg-slate-900 rounded-lg p-3">
-                <div className="text-2xl font-bold text-white">
-                  {reports.filter((r) => r.type === "CRITICAL" || r.type === "ACTIVE").length}
+          {/* Compact Stats */}
+          <div className="p-3 border-t border-slate-800 bg-slate-900/50">
+            <div className="flex items-center justify-around text-center">
+              <div>
+                <div className="text-lg font-bold text-white">
+                  {filteredReports.filter((r) => r.type === "CRITICAL" || r.type === "ACTIVE").length}
                 </div>
-                <div className="text-xs text-slate-500">Active Alerts</div>
+                <div className="text-xs text-slate-500">Active</div>
               </div>
-              <div className="bg-slate-900 rounded-lg p-3">
-                <div className="text-2xl font-bold text-white">{reports.length}</div>
-                <div className="text-xs text-slate-500">Total Reports</div>
+              <div className="w-px h-8 bg-slate-700" />
+              <div>
+                <div className="text-lg font-bold text-white">{filteredReports.length}</div>
+                <div className="text-xs text-slate-500">Total</div>
               </div>
             </div>
           </div>
@@ -283,7 +339,7 @@ export default function Home() {
         {/* Mobile sidebar backdrop */}
         {showSidebar && (
           <div
-            className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+            className="fixed inset-0 bg-black/50 z-[999] lg:hidden"
             onClick={() => setShowSidebar(false)}
           />
         )}
@@ -291,13 +347,32 @@ export default function Home() {
         {/* Map */}
         <main className="flex-1 relative">
           <Map
-            reports={reports.filter((r) => r.status === "APPROVED")}
+            reports={filteredReports.filter((r) => r.status === "APPROVED")}
             center={MINNEAPOLIS_CENTER}
             zoom={DEFAULT_ZOOM}
             selectedTypes={selectedTypes}
             showConfirmedOnly={confirmedOnly}
             onReportClick={setSelectedReport}
+            onMapClick={() => setSelectedReport(null)}
+            selectedReport={selectedReport}
           />
+
+          {/* Telegram Float CTA - Desktop only */}
+          <a
+            href="https://t.me/icetracker_msp_bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden lg:flex absolute bottom-24 left-4 items-center gap-3 bg-[#0088cc] hover:bg-[#0077b5] text-white rounded-xl px-4 py-3 shadow-lg transition group"
+          >
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+            </svg>
+            <div>
+              <div className="font-semibold text-sm">Get Alerts by Zip Code</div>
+              <div className="text-xs text-white/80">DM alerts when ICE is near you</div>
+            </div>
+            <ExternalLink className="w-4 h-4 opacity-60 group-hover:opacity-100 transition" />
+          </a>
 
           {/* Legend */}
           <div className="absolute bottom-4 left-4 bg-slate-900/90 backdrop-blur-sm rounded-lg p-3 text-xs">
@@ -315,8 +390,8 @@ export default function Home() {
 
       {/* Report Form Modal */}
       {showReportForm && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto relative" style={{ zIndex: 10000 }}>
             <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">Report ICE Activity</h2>
               <button
@@ -338,10 +413,10 @@ export default function Home() {
 
       {/* Info Modal */}
       {showInfo && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto relative" style={{ zIndex: 10000 }}>
             <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">About ICETracker</h2>
+              <h2 className="text-xl font-bold text-slate-900">ICE Tracker</h2>
               <button
                 onClick={() => setShowInfo(false)}
                 className="p-2 hover:bg-slate-100 rounded-lg transition"
@@ -349,37 +424,89 @@ export default function Home() {
                 <X className="w-5 h-5 text-slate-500" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-slate-600">
-                ICETracker is a community-driven platform for reporting and tracking Immigration and Customs Enforcement (ICE) activity. Our goal is to help communities stay informed and safe.
-              </p>
-
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <h3 className="font-semibold text-amber-800 mb-2">⚠️ Important Disclaimers</h3>
-                <ul className="text-sm text-amber-700 space-y-2">
-                  <li>• Reports are user-submitted and may contain errors</li>
-                  <li>• Always verify information with local rapid response networks</li>
-                  <li>• This platform does not encourage violence or harassment</li>
-                  <li>• Information may be outdated by the time you view it</li>
-                </ul>
+            <div className="p-6 space-y-5">
+              {/* Hero */}
+              <div className="text-center pb-4 border-b border-slate-200">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Know Your Rights. Stay Informed.</h3>
+                <p className="text-slate-600">
+                  Real-time community alerts to help Minneapolis residents understand and exercise their legal rights during immigration enforcement.
+                </p>
               </div>
 
+              {/* Data Sources */}
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <h3 className="font-semibold text-amber-900 mb-2">Live Data</h3>
+                <p className="text-sm text-amber-800 mb-2">
+                  Map data is seeded from <a href="https://iceout.org" target="_blank" rel="noopener noreferrer" className="underline">iceout.org</a> and updated with community reports.
+                </p>
+                <p className="text-sm text-amber-800 font-medium">
+                  For fastest alerts, submit reports directly via Telegram — community reports trigger instant notifications.
+                </p>
+              </div>
+
+              {/* Get Alerts - Primary CTA */}
               <div>
-                <h3 className="font-semibold text-slate-900 mb-2">Verification Levels</h3>
+                <h3 className="font-semibold text-slate-900 mb-2">Get Instant Alerts</h3>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-700 mb-3">Join our Telegram channel to receive alerts the moment reports come in:</p>
+                  <a
+                    href="https://t.me/+EnMv3G3j241jYjU0"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                  >
+                    Join Alert Channel <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Submit Reports */}
+              <div>
+                <h3 className="font-semibold text-slate-900 mb-2">Submit a Report</h3>
                 <div className="space-y-2 text-sm">
+                  <p className="text-slate-600">
+                    See ICE activity? Report it to alert the community:
+                  </p>
+                  <ul className="text-slate-600 space-y-1 ml-4">
+                    <li>• <strong>Web:</strong> Click "Report Activity" button above</li>
+                    <li>• <strong>Telegram:</strong> Message <a href="https://t.me/icetracker_msp_bot" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">@icetracker_msp_bot</a></li>
+                  </ul>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Verified reporters get instant posting. Use /register in the bot to request verification.
+                  </p>
+                </div>
+              </div>
+
+              {/* Report Types */}
+              <div>
+                <h3 className="font-semibold text-slate-900 mb-2">Report Types</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs">Trusted</span>
-                    <span className="text-slate-600">From verified partner organizations</span>
+                    <span className="w-3 h-3 rounded-full bg-red-600" />
+                    <span className="text-slate-600">Critical - Active raid</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">Verified</span>
-                    <span className="text-slate-600">Reporter verified via Ethereum wallet</span>
+                    <span className="w-3 h-3 rounded-full bg-orange-500" />
+                    <span className="text-slate-600">Active - Agents present</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full text-xs">Unverified</span>
-                    <span className="text-slate-600">Anonymous community report</span>
+                    <span className="w-3 h-3 rounded-full bg-yellow-500" />
+                    <span className="text-slate-600">Observed - Vehicle sighting</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-gray-500" />
+                    <span className="text-slate-600">Other - General info</span>
                   </div>
                 </div>
+              </div>
+
+              <div className="p-4 bg-slate-100 border border-slate-200 rounded-lg">
+                <h3 className="font-semibold text-slate-800 mb-2">Important</h3>
+                <ul className="text-sm text-slate-600 space-y-1">
+                  <li>• Reports are community-submitted and may contain errors</li>
+                  <li>• Always verify with local rapid response networks</li>
+                  <li>• This tool is for awareness, not confrontation</li>
+                </ul>
               </div>
 
               <div>
@@ -415,42 +542,75 @@ export default function Home() {
 
       {/* Selected Report Detail */}
       {selectedReport && (
-        <div className="fixed bottom-0 left-0 right-0 lg:bottom-4 lg:right-4 lg:left-auto lg:w-96 bg-white lg:rounded-xl shadow-2xl z-40 max-h-[60vh] overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={`w-3 h-3 rounded-full ${TYPE_COLORS[selectedReport.type]}`} />
-              <span className="font-medium text-slate-900">{TYPE_LABELS[selectedReport.type]}</span>
-            </div>
-            <button
-              onClick={() => setSelectedReport(null)}
-              className="p-1 hover:bg-slate-100 rounded"
-            >
-              <X className="w-4 h-4 text-slate-500" />
-            </button>
-          </div>
-          <div className="p-4 space-y-3">
-            <h3 className="font-bold text-lg text-slate-900">{selectedReport.title}</h3>
-            <p className="text-slate-600">{selectedReport.description}</p>
-            {selectedReport.address && (
-              <p className="text-sm text-slate-500 flex items-center gap-1">
-                <MapPin className="w-4 h-4" />
-                {selectedReport.address}
-              </p>
-            )}
-            <div className="flex items-center gap-4 text-sm text-slate-500">
-              <span className="flex items-center gap-1">
-                <Clock className="w-4 h-4" />
-                {new Date(selectedReport.reportedAt).toLocaleString()}
-              </span>
-            </div>
-            {selectedReport.verificationLevel !== "UNVERIFIED" && (
-              <div className="flex items-center gap-2 text-sm">
-                <Shield className="w-4 h-4 text-emerald-600" />
-                <span className="text-emerald-700">
-                  {selectedReport.verificationLevel === "TRUSTED" ? "Verified by trusted organization" : "Verified reporter"}
-                </span>
+        <div className="fixed bottom-4 left-4 right-4 lg:left-auto lg:right-6 lg:bottom-6 lg:w-[420px] z-40">
+          {/* Card */}
+          <div className="bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-700">
+            {/* Header with type indicator */}
+            <div className={`px-6 py-4 ${
+              selectedReport.type === "CRITICAL" ? "bg-red-600" :
+              selectedReport.type === "ACTIVE" ? "bg-orange-600" :
+              selectedReport.type === "OBSERVED" ? "bg-yellow-600" : "bg-slate-700"
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-white" />
+                  <span className="font-semibold text-white text-lg">
+                    {TYPE_LABELS[selectedReport.type]}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedReport(null)}
+                  className="p-2 hover:bg-white/20 rounded-lg transition"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
               </div>
-            )}
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5">
+              <h3 className="font-bold text-xl text-white leading-snug">
+                {selectedReport.title}
+              </h3>
+              
+              <p className="text-slate-300 leading-relaxed text-base">
+                {selectedReport.description}
+              </p>
+
+              {/* Location */}
+              {selectedReport.address && (
+                <div className="flex items-start gap-3 p-4 bg-slate-800/50 rounded-xl">
+                  <MapPin className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
+                  <span className="text-slate-300">{selectedReport.address}</span>
+                </div>
+              )}
+
+              {/* Meta info */}
+              <div className="flex flex-wrap items-center gap-4 pt-2">
+                <div className="flex items-center gap-2 text-slate-400">
+                  <Clock className="w-4 h-4" />
+                  <span className="text-sm">
+                    {new Date(selectedReport.reportedAt).toLocaleString()}
+                  </span>
+                </div>
+                
+                {selectedReport.verificationLevel !== "UNVERIFIED" && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-900/40 rounded-full">
+                    <Shield className="w-4 h-4 text-emerald-400" />
+                    <span className="text-emerald-400 text-sm font-medium">
+                      {selectedReport.verificationLevel === "TRUSTED" ? "Trusted Source" : "Verified"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tap to dismiss hint on mobile */}
+            <div className="lg:hidden px-6 pb-4">
+              <p className="text-center text-slate-500 text-xs">
+                Tap the map to close
+              </p>
+            </div>
           </div>
         </div>
       )}
